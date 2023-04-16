@@ -242,6 +242,8 @@ func main() {
 		return
 	}
 
+	shortest := ""
+
 	for i, soln := range solns {
 		result, ok := soln.eval()
 		if !ok {
@@ -252,6 +254,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "generated incorrect solution: %s = %d, != %d!\n", soln.String(), result, *target)
 			os.Exit(2)
 		}
-		fmt.Printf("%d: %d = %s\n", i, result, soln.String())
+		str := soln.String()
+		if shortest == "" || len(str) < len(shortest) {
+			shortest = str
+		}
+		fmt.Printf("%d: %d = %s\n", i, result, str)
 	}
+	fmt.Printf("Shortest solution: %s\n", shortest)
 }
