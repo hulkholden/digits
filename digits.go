@@ -209,6 +209,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "result is invalid\n")
 			os.Exit(1)
 		}
-		fmt.Printf("%d: %s = %d\n", i, soln.String(), result)
+		if result != *target {
+			fmt.Fprintf(os.Stderr, "generated incorrect solution: %s = %d, != %d!\n", soln.String(), result, *target)
+			os.Exit(2)
+		}
+		fmt.Printf("%d: %d = %s\n", i, result, soln.String())
 	}
 }
