@@ -72,31 +72,48 @@ func (op operation) String() string {
 }
 
 type expression struct {
+	// Val is the value of the expression.
+	Val int
+	// Op is the expression operation.
+	// If it's opNone the expression represents a constant with value Val.
 	Op   operation
 	AExp *expression
 	BExp *expression
-	// If Op==opNone this is a constant value.
-	Val int
 }
 
 func makeConstant(v int) expression {
 	return expression{Val: v}
 }
 
-func makeAdd(a, b expression) expression {
-	return expression{Op: opAdd, AExp: &a, BExp: &b}
+func makeAdd(v int, a, b expression) expression {
+	if r := a.Val + b.Val; r != v {
+		panic(fmt.Sprintf("%s + %s = %d, want %d", a, b, r, v))
+	}
+	return expression{Val: v, Op: opAdd, AExp: &a, BExp: &b}
 }
 
-func makeSubtract(a, b expression) expression {
-	return expression{Op: opSubtract, AExp: &a, BExp: &b}
+func makeSubtract(v int, a, b expression) expression {
+	if r := a.Val - b.Val; r != v {
+		panic(fmt.Sprintf("%s - %s = %d, want %d", a, b, r, v))
+	}
+	return expression{Val: v, Op: opSubtract, AExp: &a, BExp: &b}
 }
 
-func makeMultiply(a, b expression) expression {
-	return expression{Op: opMultiply, AExp: &a, BExp: &b}
+func makeMultiply(v int, a, b expression) expression {
+	if r := a.Val * b.Val; r != v {
+		panic(fmt.Sprintf("%s * %s = %d, want %d", a, b, r, v))
+	}
+	return expression{Val: v, Op: opMultiply, AExp: &a, BExp: &b}
 }
 
-func makeDivide(a, b expression) expression {
-	return expression{Op: opDivide, AExp: &a, BExp: &b}
+func makeDivide(v int, a, b expression) expression {
+	if b.Val == 0 {
+		panic("denominator is zero")
+	}
+	if r := a.Val / b.Val; r != v {
+		panic(fmt.Sprintf("%s / %s = %d, want %d", a, b, r, v))
+	}
+	return expression{Val: v, Op: opDivide, AExp: &a, BExp: &b}
 }
 
 func (e expression) String() string {
@@ -106,13 +123,12 @@ func (e expression) String() string {
 	return fmt.Sprintf("(%s %s %s)", e.AExp.String(), e.Op.String(), e.BExp.String())
 }
 
-func (e expression) value() (int, bool) {
-	// TODO: cache value in Val to avoid recomputing this.
+func (e expression) eval() (int, bool) {
 	if e.Op == opNone {
 		return e.Val, true
 	}
-	a, aOk := e.AExp.value()
-	b, bOk := e.BExp.value()
+	a, aOk := e.AExp.eval()
+	b, bOk := e.BExp.eval()
 	if aOk && bOk {
 		return e.Op.eval(a, b)
 	}
@@ -122,14 +138,8 @@ func (e expression) value() (int, bool) {
 // canonicalize ensures commutative operations are always expressed consistently (lowest operand first).
 func (e expression) canonicalize() expression {
 	if e.Op == opAdd || e.Op == opMultiply {
-		a, aOk := e.AExp.value()
-		b, bOk := e.BExp.value()
-		if aOk && bOk && b < a {
-			return expression{
-				Op:   e.Op,
-				AExp: e.BExp,
-				BExp: e.AExp,
-			}
+		if e.BExp.Val < e.AExp.Val {
+			e.AExp, e.BExp = e.BExp, e.AExp
 		}
 	}
 
@@ -160,35 +170,35 @@ func solve(target int, digits []int) []expression {
 		// Addition.
 		if target > a {
 			for _, soln := range solve(target-a, other) {
-				solutions = append(solutions, makeAdd(aExp, soln))
+				solutions = append(solutions, makeAdd(target, aExp, soln))
 			}
 		}
 
 		// Subtraction.
 		if a > target {
 			for _, soln := range solve(a-target, other) {
-				solutions = append(solutions, makeSubtract(aExp, soln))
+				solutions = append(solutions, makeSubtract(target, aExp, soln))
 			}
 		}
 		for _, soln := range solve(target+a, other) {
-			solutions = append(solutions, makeSubtract(soln, aExp))
+			solutions = append(solutions, makeSubtract(target, soln, aExp))
 		}
 
 		// Multiplication.
 		if (target % a) == 0 {
 			for _, soln := range solve(target/a, other) {
-				solutions = append(solutions, makeMultiply(aExp, soln))
+				solutions = append(solutions, makeMultiply(target, aExp, soln))
 			}
 		}
 
 		// Division.
 		if (a % target) == 0 {
 			for _, soln := range solve(a/target, other) {
-				solutions = append(solutions, makeDivide(aExp, soln))
+				solutions = append(solutions, makeDivide(target, aExp, soln))
 			}
 		}
 		for _, soln := range solve(target*a, other) {
-			solutions = append(solutions, makeDivide(soln, aExp))
+			solutions = append(solutions, makeDivide(target, soln, aExp))
 		}
 	}
 
@@ -233,7 +243,7 @@ func main() {
 	}
 
 	for i, soln := range solns {
-		result, ok := soln.value()
+		result, ok := soln.eval()
 		if !ok {
 			fmt.Fprintf(os.Stderr, "result is invalid\n")
 			os.Exit(1)
