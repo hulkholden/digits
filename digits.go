@@ -119,13 +119,10 @@ func (e expression) value() (int, bool) {
 }
 
 func solve(target int, digits []int) []expression {
-	if len(digits) == 0 {
-		return nil
-	}
-
-	other := make([]int, 0, len(digits))
-
 	var solutions []expression
+
+	// Cache this outside the loop to reduce thrashing.
+	var other []int
 
 	// See if there is a valid solution of the form 'a op otherDigits' or 'otherDigits op a'.
 	for aIdx := 0; aIdx < len(digits); aIdx++ {
