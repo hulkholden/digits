@@ -83,20 +83,20 @@ func makeConstant(v int) expression {
 	return expression{Val: v}
 }
 
-func makeAdd(a, b *expression) expression {
-	return expression{Op: opAdd, AExp: a, BExp: b}
+func makeAdd(a, b expression) expression {
+	return expression{Op: opAdd, AExp: &a, BExp: &b}
 }
 
-func makeSubtract(a, b *expression) expression {
-	return expression{Op: opSubtract, AExp: a, BExp: b}
+func makeSubtract(a, b expression) expression {
+	return expression{Op: opSubtract, AExp: &a, BExp: &b}
 }
 
-func makeMultiply(a, b *expression) expression {
-	return expression{Op: opMultiply, AExp: a, BExp: b}
+func makeMultiply(a, b expression) expression {
+	return expression{Op: opMultiply, AExp: &a, BExp: &b}
 }
 
-func makeDivide(a, b *expression) expression {
-	return expression{Op: opDivide, AExp: a, BExp: b}
+func makeDivide(a, b expression) expression {
+	return expression{Op: opDivide, AExp: &a, BExp: &b}
 }
 
 func (e expression) String() string {
@@ -118,63 +118,66 @@ func (e expression) value() (int, bool) {
 	return 0, false
 }
 
-func solve(target int, digits []int) (expression, bool) {
+func solve(target int, digits []int) []expression {
 	if len(digits) == 0 {
-		return expression{}, false
+		return nil
 	}
 
 	other := make([]int, 0, len(digits))
 
+	var solutions []expression
+
 	// See if there is a valid solution of the form 'a op otherDigits' or 'otherDigits op a'.
 	for aIdx := 0; aIdx < len(digits); aIdx++ {
+		// Identity.
 		a := digits[aIdx]
 		aExp := makeConstant(a)
 		if a == target {
-			return aExp, true
+			solutions = append(solutions, aExp)
 		}
 
 		other = other[:0]
 		other = append(other, digits[:aIdx]...)
 		other = append(other, digits[aIdx+1:]...)
 
-		// opAdd
+		// Addition.
 		if target > a {
-			if e, ok := solve(target-a, other); ok {
-				return makeAdd(&aExp, &e), true
+			for _, soln := range solve(target-a, other) {
+				solutions = append(solutions, makeAdd(aExp, soln))
 			}
 		}
 
-		// opSubtract
+		// Subtraction.
 		if a > target {
-			if e, ok := solve(a-target, other); ok {
-				return makeSubtract(&aExp, &e), true
+			for _, soln := range solve(a-target, other) {
+				solutions = append(solutions, makeSubtract(aExp, soln))
 			}
 		}
-		if e, ok := solve(target+a, other); ok {
-			return makeSubtract(&e, &aExp), true
+		for _, soln := range solve(target+a, other) {
+			solutions = append(solutions, makeSubtract(soln, aExp))
 		}
 
-		// opMultiply
+		// Multiplication.
 		if (target % a) == 0 {
-			if e, ok := solve(target/a, other); ok {
-				return makeMultiply(&aExp, &e), true
+			for _, soln := range solve(target/a, other) {
+				solutions = append(solutions, makeMultiply(aExp, soln))
 			}
 		}
 
-		// opDivide
+		// Division.
 		if (a % target) == 0 {
-			if e, ok := solve(a/target, other); ok {
-				return makeDivide(&aExp, &e), true
+			for _, soln := range solve(a/target, other) {
+				solutions = append(solutions, makeDivide(aExp, soln))
 			}
 		}
-		if e, ok := solve(target*a, other); ok {
-			return makeDivide(&e, &aExp), true
+		for _, soln := range solve(target*a, other) {
+			solutions = append(solutions, makeDivide(soln, aExp))
 		}
 	}
 
 	// TODO: divide digits into two sets, recurse.
 
-	return expression{}, false
+	return solutions
 }
 
 func main() {
@@ -195,15 +198,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	e, ok := solve(*target, digits)
-	if !ok {
+	solns := solve(*target, digits)
+	if len(solns) == 0 {
 		fmt.Printf("no solution found :(\n")
 		return
 	}
-	result, ok := e.value()
-	if !ok {
-		fmt.Fprintf(os.Stderr, "result is invalid\n")
-		os.Exit(1)
+	for i, soln := range solns {
+		result, ok := soln.value()
+		if !ok {
+			fmt.Fprintf(os.Stderr, "result is invalid\n")
+			os.Exit(1)
+		}
+		fmt.Printf("%d: %s = %d\n", i, soln.String(), result)
 	}
-	fmt.Printf("%s = %d\n", e.String(), result)
 }
