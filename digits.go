@@ -107,6 +107,7 @@ func (e expression) String() string {
 }
 
 func (e expression) value() (int, bool) {
+	// TODO: cache value in Val to avoid recomputing this.
 	if e.Op == opNone {
 		return e.Val, true
 	}
@@ -116,6 +117,25 @@ func (e expression) value() (int, bool) {
 		return e.Op.eval(a, b)
 	}
 	return 0, false
+}
+
+// canonicalize ensures commutative operations are always expressed consistently (lowest operand first).
+func (e expression) canonicalize() expression {
+	if e.Op == opAdd || e.Op == opMultiply {
+		a, aOk := e.AExp.value()
+		b, bOk := e.BExp.value()
+		if aOk && bOk && b < a {
+			return expression{
+				Op:   e.Op,
+				AExp: e.BExp,
+				BExp: e.AExp,
+			}
+		}
+	}
+
+	// TODO: this should also consider associativity (e.g. (a + (b+c)) == ((a+b) + c))
+
+	return e
 }
 
 func solve(target int, digits []int) []expression {
@@ -172,9 +192,20 @@ func solve(target int, digits []int) []expression {
 		}
 	}
 
-	// TODO: divide digits into two sets, recurse.
+	// TODO: divide digits into two sets. For each solution in set A, see if there is a solution in set B which will form the target.
 
-	return solutions
+	// Normalize remove duplicates.
+	seen := make(map[string]bool)
+	var solsOut []expression
+	for i := range solutions {
+		s := solutions[i].canonicalize()
+		key := s.String()
+		if !seen[key] {
+			seen[key] = true
+			solsOut = append(solsOut, s)
+		}
+	}
+	return solsOut
 }
 
 func main() {
@@ -200,6 +231,7 @@ func main() {
 		fmt.Printf("no solution found :(\n")
 		return
 	}
+
 	for i, soln := range solns {
 		result, ok := soln.value()
 		if !ok {
