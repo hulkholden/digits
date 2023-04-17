@@ -116,35 +116,25 @@ func makeConstant(v int) expression {
 	return expression{Val: v}
 }
 
-func makeAdd(v int, a, b expression) expression {
-	if r := a.Val + b.Val; r != v {
-		panic(fmt.Sprintf("%s + %s = %d, want %d", a, b, r, v))
-	}
-	return expression{Val: v, Op: opAdd, AExp: &a, BExp: &b}
+func makeAdd(a, b expression) expression {
+	return expression{Val: a.Val + b.Val, Op: opAdd, AExp: &a, BExp: &b}
 }
 
-func makeSubtract(v int, a, b expression) expression {
-	if r := a.Val - b.Val; r != v {
-		panic(fmt.Sprintf("%s - %s = %d, want %d", a, b, r, v))
-	}
-	return expression{Val: v, Op: opSubtract, AExp: &a, BExp: &b}
+func makeSubtract(a, b expression) expression {
+	// TODO: check positive result?
+	return expression{Val: a.Val - b.Val, Op: opSubtract, AExp: &a, BExp: &b}
 }
 
-func makeMultiply(v int, a, b expression) expression {
-	if r := a.Val * b.Val; r != v {
-		panic(fmt.Sprintf("%s * %s = %d, want %d", a, b, r, v))
-	}
-	return expression{Val: v, Op: opMultiply, AExp: &a, BExp: &b}
+func makeMultiply(a, b expression) expression {
+	return expression{Val: a.Val * b.Val, Op: opMultiply, AExp: &a, BExp: &b}
 }
 
-func makeDivide(v int, a, b expression) expression {
+func makeDivide(a, b expression) expression {
+	// TODO: check exact?
 	if b.Val == 0 {
 		panic("denominator is zero")
 	}
-	if r := a.Val / b.Val; r != v {
-		panic(fmt.Sprintf("%s / %s = %d, want %d", a, b, r, v))
-	}
-	return expression{Val: v, Op: opDivide, AExp: &a, BExp: &b}
+	return expression{Val: a.Val / b.Val, Op: opDivide, AExp: &a, BExp: &b}
 }
 
 func (e expression) String() string {
@@ -201,39 +191,45 @@ func solve(target int, digits []int) []expression {
 		// Addition.
 		if target > a {
 			for _, soln := range solve(target-a, other) {
-				solutions = append(solutions, makeAdd(target, aExp, soln))
+				solutions = append(solutions, makeAdd(aExp, soln))
 			}
 		}
 
 		// Subtraction.
 		if a > target {
 			for _, soln := range solve(a-target, other) {
-				solutions = append(solutions, makeSubtract(target, aExp, soln))
+				solutions = append(solutions, makeSubtract(aExp, soln))
 			}
 		}
 		for _, soln := range solve(target+a, other) {
-			solutions = append(solutions, makeSubtract(target, soln, aExp))
+			solutions = append(solutions, makeSubtract(soln, aExp))
 		}
 
 		// Multiplication.
 		if (target % a) == 0 {
 			for _, soln := range solve(target/a, other) {
-				solutions = append(solutions, makeMultiply(target, aExp, soln))
+				solutions = append(solutions, makeMultiply(aExp, soln))
 			}
 		}
 
 		// Division.
 		if (a % target) == 0 {
 			for _, soln := range solve(a/target, other) {
-				solutions = append(solutions, makeDivide(target, aExp, soln))
+				solutions = append(solutions, makeDivide(aExp, soln))
 			}
 		}
 		for _, soln := range solve(target*a, other) {
-			solutions = append(solutions, makeDivide(target, soln, aExp))
+			solutions = append(solutions, makeDivide(soln, aExp))
 		}
 	}
 
 	// TODO: divide digits into two sets. For each solution in set A, see if there is a solution in set B which will form the target.
+
+	for _, soln := range solutions {
+		if soln.Val != target {
+			panic(fmt.Sprintf("generated invalid solution: %s = %d, want %d", soln, soln.Val, target))
+		}
+	}
 
 	// Normalize remove duplicates.
 	seen := make(map[string]bool)
