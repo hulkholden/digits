@@ -3,14 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
+	"log"
 	"strconv"
 	"strings"
 )
 
 var (
 	digitsStr = flag.String("digits", "", "A comma-separated list of digits")
-	target    = flag.Int("target", 0, "The target value to solve for")
+
+	targetRange = flag.String("target_range", "", "The target range to produce solutions for (inclusive)")
+	target      = flag.Int("target", 0, "The exact target value to solve for")
 )
 
 func parseDigits(s string) ([]int, error) {
@@ -25,6 +27,35 @@ func parseDigits(s string) ([]int, error) {
 		r[i] = v
 	}
 	return r, nil
+}
+
+func parseTargetRange(s string) (int, int, error) {
+	parts := strings.Split(s, ",")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("want 2 comma-separated values, got %d", len(s))
+	}
+
+	min, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("error parsing %q: %v", parts[0], err)
+	}
+	max, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("error parsing %q: %v", parts[1], err)
+	}
+
+	if min <= 0 {
+		return 0, 0, fmt.Errorf("range lower bound must be positive, got %d", min)
+	}
+	if max <= 0 {
+		return 0, 0, fmt.Errorf("range upper bound must be positive, got %d", max)
+	}
+
+	// Just flip inverted ranges.
+	if min > max {
+		return max, min, nil
+	}
+	return min, max, nil
 }
 
 type operation int
@@ -218,47 +249,65 @@ func solve(target int, digits []int) []expression {
 	return solsOut
 }
 
+func shortest(solns []expression) (expression, error) {
+	shortest := ""
+	var shortestSoln expression
+
+	for _, soln := range solns {
+		str := soln.String()
+		if shortest == "" || len(str) < len(shortest) {
+			shortest = str
+			shortestSoln = soln
+		}
+	}
+	return shortestSoln, nil
+}
+
 func main() {
 	flag.Parse()
 
 	if *digitsStr == "" {
-		fmt.Fprintf(os.Stderr, "--digits must be provided")
-		os.Exit(1)
+		log.Fatalf("--digits must be provided")
 	}
 	digits, err := parseDigits(*digitsStr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "--digits invalid: %v", err)
-		os.Exit(1)
+		log.Fatalf("--digits invalid: %v", err)
 	}
 
-	if *target == 0 {
-		fmt.Fprintf(os.Stderr, "--target must be provided")
-		os.Exit(1)
-	}
-
-	solns := solve(*target, digits)
-	if len(solns) == 0 {
-		fmt.Printf("no solution found :(\n")
-		return
-	}
-
-	shortest := ""
-
-	for i, soln := range solns {
-		result, ok := soln.eval()
-		if !ok {
-			fmt.Fprintf(os.Stderr, "result is invalid\n")
-			os.Exit(1)
+	switch {
+	case *targetRange != "":
+		min, max, err := parseTargetRange(*targetRange)
+		if err != nil {
+			log.Fatalf("--target_range invalid: %v", err)
 		}
-		if result != *target {
-			fmt.Fprintf(os.Stderr, "generated incorrect solution: %s = %d, != %d!\n", soln.String(), result, *target)
-			os.Exit(2)
+		for i := min; i <= max; i++ {
+			solns := solve(i, digits)
+			fmt.Printf("%d: %d solutions found\n", i, len(solns))
 		}
-		str := soln.String()
-		if shortest == "" || len(str) < len(shortest) {
-			shortest = str
+	case *target != 0:
+		solns := solve(*target, digits)
+		if len(solns) == 0 {
+			fmt.Printf("no solution found :(\n")
+			return
 		}
-		fmt.Printf("%d: %d = %s\n", i, result, str)
+
+		for i, soln := range solns {
+			result, ok := soln.eval()
+			if !ok {
+				log.Fatalf("result is invalid")
+			}
+			if result != *target {
+				log.Fatalf("generated incorrect solution: %s = %d, != %d!", soln, result, *target)
+			}
+			fmt.Printf("%d: %d = %s\n", i, result, soln)
+		}
+
+		shortest, err := shortest(solns)
+		if err != nil {
+			log.Fatalf("Failed to get shortest solution: %v", err)
+		}
+		fmt.Printf("Shortest solution: %s\n", shortest)
+	default:
+		log.Fatalf("--target or --solve_all must be provided")
 	}
-	fmt.Printf("Shortest solution: %s\n", shortest)
 }
