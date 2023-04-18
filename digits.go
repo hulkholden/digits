@@ -164,6 +164,34 @@ func (e expression) canonicalize() expression {
 		}
 	}
 
+	// Ensure (a + (b + c)) is ordered such that a <= b <= c
+	// TODO: Should we generate n-ary operations and sort by value before converting back to binary ops?
+	if (e.Op == opAdd && e.BExp.Op == opAdd) ||
+		(e.Op == opMultiply && e.BExp.Op == opMultiply) {
+		a := e.AExp
+		b := e.BExp.AExp
+		c := e.BExp.BExp
+
+		if b.Val < a.Val {
+			e.AExp = b
+			e.BExp.AExp = a
+		} else if c.Val < a.Val {
+			e.AExp = c
+			e.BExp.BExp = a
+		}
+	}
+
+	// Ensure ((a - b) - c) is ordered such that b > c
+	if e.Op == opSubtract && e.AExp.Op == opSubtract {
+		b := e.AExp.BExp
+		c := e.BExp
+
+		if c.Val > b.Val {
+			e.AExp.BExp = c
+			e.BExp = b
+		}
+	}
+
 	// TODO: this should also consider associativity (e.g. (a + (b+c)) == ((a+b) + c))
 
 	return e
@@ -231,7 +259,7 @@ func solve(target int, digits []int) []expression {
 		}
 	}
 
-	// Normalize remove duplicates.
+	// Normalize and remove duplicates.
 	seen := make(map[string]bool)
 	var solsOut []expression
 	for i := range solutions {

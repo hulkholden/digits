@@ -16,7 +16,7 @@ func Test_solve(t *testing.T) {
 		"a": {
 			digits:    []int{5, 7, 9, 10, 15, 25},
 			target:    93,
-			wantLen:   146,
+			wantLen:   114,
 			wantFirst: "(5 + (((25 * (10 + 15)) - 9) / 7))",
 		},
 		"b": {
@@ -24,25 +24,25 @@ func Test_solve(t *testing.T) {
 			digits:    []int{4, 5, 7, 8, 15, 20},
 			target:    113,
 			wantFirst: "(4 + (5 + (8 * (20 - 7))))",
-			wantLen:   332,
+			wantLen:   275,
 			// TODO: this is correct but a much simpler solution is (8*15)-7.
 		},
 		"c": {
 			digits:    []int{3, 4, 6, 9, 11, 15},
 			target:    205,
-			wantLen:   88,
+			wantLen:   63,
 			wantFirst: "(3 + (4 + (11 * ((9 + 15) - 6))))",
 		},
 		"d": {
 			digits:    []int{3, 5, 9, 11, 23, 25},
 			target:    351,
-			wantLen:   98,
+			wantLen:   79,
 			wantFirst: "(3 * ((23 + (9 * 11)) - 5))",
 		},
 		"f": {
 			digits:    []int{24, 8, 10, 20, 5, 15},
 			target:    497,
-			wantLen:   31,
+			wantLen:   20,
 			wantFirst: "((10 + (15 + (20 * 24))) - 8)",
 		},
 	}
