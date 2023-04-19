@@ -6,6 +6,8 @@ import (
 	"log"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -107,9 +109,8 @@ type expression struct {
 	Val int
 	// Op is the expression operation.
 	// If it's opNone the expression represents a constant with value Val.
-	Op   operation
-	AExp *expression
-	BExp *expression
+	Op       operation
+	Children []*expression
 }
 
 func makeConstant(v int) expression {
@@ -117,16 +118,16 @@ func makeConstant(v int) expression {
 }
 
 func makeAdd(a, b expression) expression {
-	return expression{Val: a.Val + b.Val, Op: opAdd, AExp: &a, BExp: &b}
+	return expression{Val: a.Val + b.Val, Op: opAdd, Children: []*expression{&a, &b}}
 }
 
 func makeSubtract(a, b expression) expression {
 	// TODO: check positive result?
-	return expression{Val: a.Val - b.Val, Op: opSubtract, AExp: &a, BExp: &b}
+	return expression{Val: a.Val - b.Val, Op: opSubtract, Children: []*expression{&a, &b}}
 }
 
 func makeMultiply(a, b expression) expression {
-	return expression{Val: a.Val * b.Val, Op: opMultiply, AExp: &a, BExp: &b}
+	return expression{Val: a.Val * b.Val, Op: opMultiply, Children: []*expression{&a, &b}}
 }
 
 func makeDivide(a, b expression) expression {
@@ -134,61 +135,83 @@ func makeDivide(a, b expression) expression {
 	if b.Val == 0 {
 		panic("denominator is zero")
 	}
-	return expression{Val: a.Val / b.Val, Op: opDivide, AExp: &a, BExp: &b}
+	return expression{Val: a.Val / b.Val, Op: opDivide, Children: []*expression{&a, &b}}
 }
 
 func (e expression) String() string {
 	if e.Op == opNone {
 		return fmt.Sprintf("%d", e.Val)
 	}
-	return fmt.Sprintf("(%s %s %s)", e.AExp.String(), e.Op.String(), e.BExp.String())
+
+	children := make([]string, len(e.Children))
+	for i, c := range e.Children {
+		children[i] = c.String()
+	}
+
+	return fmt.Sprintf("(%s)", strings.Join(children, fmt.Sprintf(" %s ", e.Op.String())))
 }
 
 func (e expression) eval() (int, bool) {
 	if e.Op == opNone {
 		return e.Val, true
 	}
-	a, aOk := e.AExp.eval()
-	b, bOk := e.BExp.eval()
-	if aOk && bOk {
-		return e.Op.eval(a, b)
+
+	var val int
+	for i, c := range e.Children {
+		operand, ok := c.eval()
+		if !ok {
+			return 0, false
+		}
+
+		if i == 0 {
+			val = operand
+		} else {
+			val, ok = e.Op.eval(val, operand)
+			if !ok {
+				return 0, false
+			}
+		}
 	}
-	return 0, false
+	return val, true
+}
+
+// fuse merges nested expressions like (a + (b + c)) into (a + b + c)
+func (e expression) fuse() expression {
+	// TODO: we can do this for opSubtract and opDiv too, but we need to make sure first element stays the same.
+	// Or, we could represent subtraction as addition over negated values?
+	if e.Op != opAdd && e.Op != opMultiply {
+		return e
+	}
+
+	newChildren := make([]*expression, 0, len(e.Children))
+	for _, c := range e.Children {
+		if c.Op != e.Op {
+			newChildren = append(newChildren, c)
+		} else {
+			newChildren = append(newChildren, c.Children...)
+		}
+	}
+
+	e.Children = newChildren
+	return e
 }
 
 // canonicalize ensures commutative operations are always expressed consistently (lowest operand first).
 func (e expression) canonicalize() expression {
 	if e.Op == opAdd || e.Op == opMultiply {
-		if e.BExp.Val < e.AExp.Val {
-			e.AExp, e.BExp = e.BExp, e.AExp
-		}
-	}
-
-	// Ensure (a + (b + c)) is ordered such that a <= b <= c
-	// TODO: Should we generate n-ary operations and sort by value before converting back to binary ops?
-	if (e.Op == opAdd && e.BExp.Op == opAdd) ||
-		(e.Op == opMultiply && e.BExp.Op == opMultiply) {
-		a := e.AExp
-		b := e.BExp.AExp
-		c := e.BExp.BExp
-
-		if b.Val < a.Val {
-			e.AExp = b
-			e.BExp.AExp = a
-		} else if c.Val < a.Val {
-			e.AExp = c
-			e.BExp.BExp = a
-		}
+		slices.SortFunc(e.Children, func(a, b *expression) bool { return a.Val < b.Val })
 	}
 
 	// Ensure ((a - b) - c) is ordered such that b > c
-	if e.Op == opSubtract && e.AExp.Op == opSubtract {
-		b := e.AExp.BExp
-		c := e.BExp
+	// TODO: generalize for n>2 once we also fuse subtraction - or (better) implement subtraction as addition over negated values.
+	if e.Op == opSubtract && len(e.Children) == 2 &&
+		e.Children[0].Op == opSubtract && len(e.Children[0].Children) == 2 {
+		b := e.Children[0].Children[1]
+		c := e.Children[1]
 
 		if c.Val > b.Val {
-			e.AExp.BExp = c
-			e.BExp = b
+			e.Children[0].Children[1] = c
+			e.Children[1] = b
 		}
 	}
 
@@ -262,8 +285,9 @@ func solve(target int, digits []int) []expression {
 	// Normalize and remove duplicates.
 	seen := make(map[string]bool)
 	var solsOut []expression
-	for i := range solutions {
-		s := solutions[i].canonicalize()
+	for _, s := range solutions {
+		s = s.fuse()
+		s = s.canonicalize()
 		key := s.String()
 		if !seen[key] {
 			seen[key] = true
@@ -297,6 +321,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("--digits invalid: %v", err)
 	}
+
+	// TODO: When printing out the solution we want to show binary operations (i.e. unfuse the n-ary operations).
 
 	switch {
 	case *targetRange != "":
