@@ -77,6 +77,10 @@ var opStrings = map[operation]string{
 	opDivide:   "/",
 }
 
+func (op operation) commutative() bool {
+	return op == opAdd || op == opMultiply
+}
+
 func (op operation) eval(a, b int) (int, bool) {
 	switch op {
 	case opAdd:
@@ -179,7 +183,7 @@ func (e expression) eval() (int, bool) {
 func (e expression) fuse() expression {
 	// TODO: we can do this for opSubtract and opDiv too, but we need to make sure first element stays the same.
 	// Or, we could represent subtraction as addition over negated values?
-	if e.Op != opAdd && e.Op != opMultiply {
+	if !e.Op.commutative() {
 		return e
 	}
 
@@ -198,7 +202,7 @@ func (e expression) fuse() expression {
 
 // canonicalize ensures commutative operations are always expressed consistently (lowest operand first).
 func (e expression) canonicalize() expression {
-	if e.Op == opAdd || e.Op == opMultiply {
+	if e.Op.commutative() {
 		slices.SortFunc(e.Children, func(a, b *expression) bool { return a.Val < b.Val })
 	}
 
