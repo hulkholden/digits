@@ -317,6 +317,10 @@ func solve(target int, digits []int) []expression {
 }
 
 func shortest(solns []expression) (expression, error) {
+	if len(solns) == 0 {
+		return expression{}, fmt.Errorf("no solutions")
+	}
+
 	shortest := ""
 	var shortestSoln expression
 
