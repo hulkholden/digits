@@ -16,34 +16,34 @@ func Test_solve(t *testing.T) {
 		"a": {
 			digits:    []int{5, 7, 9, 10, 15, 25},
 			target:    93,
-			wantLen:   110,
-			wantFirst: "(5 + (((25 * (10 + 15)) - 9) / 7))",
+			wantLen:   68,
+			wantFirst: "((((25 * (15 + 10)) + -9) / 7) + 5)",
 		},
 		"b": {
 
 			digits:    []int{4, 5, 7, 8, 15, 20},
 			target:    113,
-			wantFirst: "(4 + 5 + (8 * (20 - 7)))",
-			wantLen:   219,
+			wantFirst: "(((20 + -7) * 8) + 5 + 4)",
+			wantLen:   190,
 			// TODO: this is correct but a much simpler solution is (8*15)-7.
 		},
 		"c": {
 			digits:    []int{3, 4, 6, 9, 11, 15},
 			target:    205,
-			wantLen:   55,
-			wantFirst: "(3 + 4 + (11 * ((9 + 15) - 6)))",
+			wantLen:   34,
+			wantFirst: "(((15 + 9 + -6) * 11) + 4 + 3)",
 		},
 		"d": {
 			digits:    []int{3, 5, 9, 11, 23, 25},
 			target:    351,
-			wantLen:   66,
-			wantFirst: "(3 * ((23 + (9 * 11)) - 5))",
+			wantLen:   24,
+			wantFirst: "(((11 * 9) + 23 + -5) * 3)",
 		},
 		"f": {
 			digits:    []int{24, 8, 10, 20, 5, 15},
 			target:    497,
-			wantLen:   18,
-			wantFirst: "((10 + 15 + (20 * 24)) - 8)",
+			wantLen:   11,
+			wantFirst: "((24 * 20) + 15 + 10 + -8)",
 		},
 	}
 	for tn, tt := range tests {

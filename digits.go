@@ -68,6 +68,7 @@ const (
 	opSubtract
 	opMultiply
 	opDivide
+	opNegate
 )
 
 var opStrings = map[operation]string{
@@ -75,13 +76,14 @@ var opStrings = map[operation]string{
 	opSubtract: "-",
 	opMultiply: "*",
 	opDivide:   "/",
+	opNegate:   "-",
 }
 
 func (op operation) commutative() bool {
 	return op == opAdd || op == opMultiply
 }
 
-func (op operation) eval(a, b int) (int, bool) {
+func (op operation) evalBinary(a, b int) (int, bool) {
 	switch op {
 	case opAdd:
 		return a + b, true
@@ -121,6 +123,10 @@ func makeConstant(v int) expression {
 	return expression{Val: v}
 }
 
+func makeNegate(a expression) expression {
+	return expression{Val: -a.Val, Op: opNegate, Children: []*expression{&a}}
+}
+
 func makeAdd(a, b expression) expression {
 	return expression{Val: a.Val + b.Val, Op: opAdd, Children: []*expression{&a, &b}}
 }
@@ -147,6 +153,13 @@ func (e expression) String() string {
 		return fmt.Sprintf("%d", e.Val)
 	}
 
+	if e.Op == opNegate {
+		if len(e.Children) != 1 {
+			panic(fmt.Sprintf("want 1 operand for negate, got %d", len(e.Children)))
+		}
+		return fmt.Sprintf("-%s", e.Children[0].String())
+	}
+
 	children := make([]string, len(e.Children))
 	for i, c := range e.Children {
 		children[i] = c.String()
@@ -159,6 +172,16 @@ func (e expression) eval() (int, bool) {
 	if e.Op == opNone {
 		return e.Val, true
 	}
+	if e.Op == opNegate {
+		if len(e.Children) != 1 {
+			panic(fmt.Sprintf("want 1 operand for negate, got %d", len(e.Children)))
+		}
+		operand, ok := e.Children[0].eval()
+		if !ok {
+			return 0, false
+		}
+		return -operand, true
+	}
 
 	var val int
 	for i, c := range e.Children {
@@ -170,7 +193,7 @@ func (e expression) eval() (int, bool) {
 		if i == 0 {
 			val = operand
 		} else {
-			val, ok = e.Op.eval(val, operand)
+			val, ok = e.Op.evalBinary(val, operand)
 			if !ok {
 				return 0, false
 			}
@@ -202,26 +225,18 @@ func (e expression) fuse() expression {
 
 // canonicalize ensures commutative operations are always expressed consistently (lowest operand first).
 func (e expression) canonicalize() expression {
+	// Sort operands by magnitude (largest to smallest).
 	if e.Op.commutative() {
-		slices.SortFunc(e.Children, func(a, b *expression) bool { return a.Val < b.Val })
+		slices.SortFunc(e.Children, func(a, b *expression) bool { return abs(a.Val) > abs(b.Val) })
 	}
-
-	// Ensure ((a - b) - c) is ordered such that b > c
-	// TODO: generalize for n>2 once we also fuse subtraction - or (better) implement subtraction as addition over negated values.
-	if e.Op == opSubtract && len(e.Children) == 2 &&
-		e.Children[0].Op == opSubtract && len(e.Children[0].Children) == 2 {
-		b := e.Children[0].Children[1]
-		c := e.Children[1]
-
-		if c.Val > b.Val {
-			e.Children[0].Children[1] = c
-			e.Children[1] = b
-		}
-	}
-
-	// TODO: this should also consider associativity (e.g. (a + (b+c)) == ((a+b) + c))
-
 	return e
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func solve(target int, digits []int) []expression {
@@ -253,11 +268,11 @@ func solve(target int, digits []int) []expression {
 		// Subtraction.
 		if a > target {
 			for _, soln := range solve(a-target, other) {
-				solutions = append(solutions, makeSubtract(aExp, soln))
+				solutions = append(solutions, makeAdd(aExp, makeNegate(soln)))
 			}
 		}
 		for _, soln := range solve(target+a, other) {
-			solutions = append(solutions, makeSubtract(soln, aExp))
+			solutions = append(solutions, makeAdd(soln, makeNegate(aExp)))
 		}
 
 		// Multiplication.
